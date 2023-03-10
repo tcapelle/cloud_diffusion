@@ -4,7 +4,6 @@ from types import SimpleNamespace
 import wandb
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.data.dataloader import default_collate
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import OneCycleLR
 
@@ -16,6 +15,7 @@ from cloud_diffusion.dataset import download_dataset, CloudDataset
 from cloud_diffusion.utils import (
     save_model, get_unet_params, init_ddpm, to_device, 
     ddim_sampler, log_images, set_seed, parse_args)
+from cloud_diffusion.ddpm import collate_ddpm
 
 
 PROJECT_NAME = "ddpm_clouds"
@@ -23,7 +23,8 @@ DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v0'
 
 config = SimpleNamespace(    
     epochs = 100, # number of epochs
-    model_name="unet_small", # model name to save
+    model_name="unet_small", # model name to save [unet_small, unet_big, uvit]
+    strategy="ddpm", # strategy to use [ddpm, simple_diffusion]
     noise_steps=1000, # number of noise steps on the diffusion process
     sampler_steps=333, # number of sampler steps on the diffusion process
     seed = 42, # random seed
@@ -40,43 +41,8 @@ config = SimpleNamespace(
 
 config.model_params = get_unet_params(config.model_name, config.num_frames)
 
-
 set_seed(config.seed)
 device = torch.device(config.device)
-
-## DDPM params
-## From fastai V2 Course DDPM notebooks
-betamin,betamax,n_steps = 0.0001,0.02,config.noise_steps
-beta = torch.linspace(betamin, betamax, n_steps)
-alpha = 1.-beta
-alphabar = alpha.cumprod(dim=0)
-sigma = beta.sqrt()
-
-def noisify(x0, ᾱ):
-    "Noise only the last frame"
-    past_frames = x0[:,:-1]
-    x0 = x0[:,-1:]
-    device = x0.device
-    n = len(x0)
-    t = torch.randint(0, n_steps, (n,), dtype=torch.long)
-    ε = torch.randn(x0.shape, device=device)
-    ᾱ_t = ᾱ[t].reshape(-1, 1, 1, 1).to(device)
-    xt = ᾱ_t.sqrt()*x0 + (1-ᾱ_t).sqrt()*ε
-    return torch.cat([past_frames, xt], dim=1), t.to(device), ε
-
-def collate_ddpm(b): 
-    "Collate function that noisifies the last frame"
-    return noisify(default_collate(b), alphabar)
-
-def dl_ddpm(dataset, shuffle=True): 
-    "Create a PyTorch DataLoader that noisifies the last frame"
-    return DataLoader(dataset, 
-                      batch_size=config.batch_size, 
-                      collate_fn=collate_ddpm, 
-                      shuffle=shuffle, 
-                      num_workers=config.num_workers)
-
-
 
 # downlaod the dataset from the wandb.Artifact
 files = download_dataset(DATASET_ARTIFACT, PROJECT_NAME)
@@ -85,9 +51,13 @@ train_ds = CloudDataset(files=files[:-config.validation_days],
 valid_ds = CloudDataset(files=files[-config.validation_days:], 
                         num_frames=config.num_frames, img_size=config.img_size)
 
+collate_fn = collate_ddpm
+
 # DDPM dataloaders
-train_dataloader = dl_ddpm(train_ds, shuffle=True)
-valid_dataloader = dl_ddpm(valid_ds)
+train_dataloader = DataLoader(train_ds, config.batch_size, shuffle=True, 
+                              collate_fn=collate_fn,  num_workers=config.num_workers)
+valid_dataloader = DataLoader(valid_ds, config.batch_size, shuffle=False, 
+                              collate_fn=collate_fn,  num_workers=config.num_workers)
 
 # model setup
 model = UNet2DModel(**config.model_params).to(device)
