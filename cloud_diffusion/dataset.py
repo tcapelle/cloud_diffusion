@@ -9,7 +9,7 @@ from fastprogress import progress_bar
 from cloud_diffusion.utils import ls
 
 PROJECT_NAME = "ddpm_clouds"
-ARTIFACT_NAME = 'capecape/gtc/np_dataset:v0'
+DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v0'
 
 class CloudDataset:
     
@@ -17,12 +17,12 @@ class CloudDataset:
                  files, # list of numpy files to load (they come from the artifact)
                  num_frames=4, # how many consecutive frames to stack
                  scale=True, # if we images to interval [-0.5, 0.5]
-                 size=64, # resize dim, original images are big (446, 780)
+                 img_size=64, # resize dim, original images are big (446, 780)
                  valid=False, # if True, transforms are deterministic
                 ):
         
-        tfms = [T.Resize((size, int(size*1.7)))] if size is not None else []
-        tfms += [T.RandomCrop(size)] if not valid else [T.CenterCrop(size)]
+        tfms = [T.Resize((img_size, int(img_size*1.7)))] if img_size is not None else []
+        tfms += [T.RandomCrop(img_size)] if not valid else [T.CenterCrop(img_size)]
         self.tfms = T.Compose(tfms)
         
         
@@ -53,18 +53,16 @@ class CloudDataset:
     def save(self, fname="cloud_frames.npy"):
         np.save(fname, self.data)
 
-    @classmethod
-    def from_artifact(cls, at_name=ARTIFACT_NAME):
+def download_dataset(at_name, project_name):
+    "Downloads dataset from wandb artifact"
+    with wandb.init(project=project_name, job_type="download_dataset"):
+        artifact = wandb.use_artifact(at_name, type='dataset')
+        artifact_dir = artifact.download()
 
-        with wandb.init(project=PROJECT_NAME, job_type="download_dataset"):
-            artifact = wandb.use_artifact(at_name, type='dataset')
-            artifact_dir = artifact.download()
+    files = ls(Path(artifact_dir))
+    return files
 
-        files = ls(Path(artifact_dir))
-
-        return cls(files)
-
-        
 if __name__=="__main__":
-    train_ds = CloudDataset.from_artifact(ARTIFACT_NAME)
+    files = download_dataset(DATASET_ARTIFACT, project_name=PROJECT_NAME)
+    train_ds = CloudDataset(files)
     print(f"Let's grab 5 samples: {train_ds[0:5].shape}")
