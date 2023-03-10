@@ -83,12 +83,14 @@ def diff_sample(model, past_frames, sched, **kwargs):
         preds.append(new_frame.float().cpu())
     return preds
 
-
 def ddim_sampler(steps=350, eta=1.):
     "DDIM sampler, faster and a bit better than the built-in sampler"
     ddim_sched = DDIMScheduler()
     ddim_sched.set_timesteps(steps)
     return partial(diff_sample, sched=ddim_sched, eta=eta)
+
+
+## Wandb functions
 
 def to_wandb_image(img):
     "Convert a tensor to a wandb.Image"
@@ -101,7 +103,19 @@ def log_images(xt, samples):
     frames = torch.cat([xt[:, :-1,...].to(device), samples[-1]], dim=1)
     wandb.log({"sampled_images": [to_wandb_image(img) for img in frames]})
 
+def save_model(model, model_name):
+    "Save the model to wandb"
+    model_name = f"{wandb.run.id}_{model_name}"
+    models_folder = Path("models")
+    if not models_folder.exists():
+        models_folder.mkdir()
+    torch.save(model.state_dict(), models_folder/f"{model_name}.pth")
+    at = wandb.Artifact(model_name, type="model")
+    at.add_file(f"models/{model_name}.pth")
+    wandb.log_artifact(at)
+
 def parse_args(config):
+    "A brute force way to parse arguments, it is probably not a good idea to use it"
     parser = argparse.ArgumentParser(description='Run training baseline')
     for k,v in config.__dict__.items():
         parser.add_argument('--'+k, type=type(v), default=v)
