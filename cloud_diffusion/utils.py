@@ -1,4 +1,5 @@
-import random
+import random, argparse
+from types import SimpleNamespace
 from pathlib import Path
 from functools import partial
 import fastcore.all as fc
@@ -11,6 +12,25 @@ from torch.nn import init
 from fastprogress import progress_bar
 
 from diffusers.schedulers import DDIMScheduler
+
+def get_unet_params(model_name="unet_small", num_frames=4):
+    "Return the parameters for the diffusers UNet2d model"
+    if model_name == "unet_small":
+        return dict(
+            block_out_channels=(16, 32, 64, 128), # number of channels for each block
+            norm_num_groups=8, # number of groups for the normalization layer
+            in_channels=num_frames, # number of input channels
+            out_channels=1, # number of output channels
+            )
+    elif model_name == "unet_big":
+        return dict(
+            block_out_channels=(32, 64, 128, 256), # number of channels for each block
+            norm_num_groups=8, # number of groups for the normalization layer
+            in_channels=num_frames, # number of input channels
+            out_channels=1, # number of output channels
+            )
+    else:
+        raise(f"Model name not found: {model_name}, choose between 'unet_small' or 'unet_big'")
 
 def set_seed(s, reproducible=False):
     "Set random seed for `random`, `torch`, and `numpy` (where available)"
@@ -80,3 +100,13 @@ def log_images(xt, samples):
     device = predicted.device
     frames = torch.cat([xt[:, :-1,...].to(device), samples[-1]], dim=1)
     wandb.log({"sampled_images": [to_wandb_image(img) for img in frames]})
+
+def parse_args(config):
+    parser = argparse.ArgumentParser(description='Run training baseline')
+    for k,v in config.__dict__.items():
+        parser.add_argument('--'+k, type=type(v), default=v)
+    args = vars(parser.parse_args())
+    
+    # update config with parsed args
+    for k, v in args.items():
+        setattr(config, k, v)

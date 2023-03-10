@@ -12,40 +12,31 @@ from fastprogress import progress_bar
 
 from diffusers import UNet2DModel
 
-from torcheval.metrics import Mean
-
-
 from cloud_diffusion.dataset import download_dataset, CloudDataset
-from cloud_diffusion.utils import init_ddpm, to_device, ddim_sampler, log_images, set_seed
+from cloud_diffusion.utils import get_unet_params, init_ddpm, to_device, ddim_sampler, log_images, set_seed, parse_args
 
 
 PROJECT_NAME = "ddpm_clouds_debug"
 DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v0'
 
 config = SimpleNamespace(    
-    epochs = 1,
-    model_name="unet2d",
-    noise_steps=1000,
-    sampler_steps=333,
-    seed = 42,
-    batch_size = 64,
-    img_size = 64,
-    device = "cuda",
-    use_wandb = True,
-    num_workers=8,
-    num_frames=4,
-    compile=True,
-    lr = 5e-4,
-    validation_days=3,
-    n_preds=8,
-    log_every_epoch = 10,
-    model_params=dict(
-        block_out_channels=(32, 64, 128, 256),
-        norm_num_groups=8,
-        in_channels=4,
-        out_channels=1,
-        ),
+    epochs = 100, # number of epochs
+    model_name="unet_small", # model name to save
+    noise_steps=1000, # number of noise steps on the diffusion process
+    sampler_steps=333, # number of sampler steps on the diffusion process
+    seed = 42, # random seed
+    batch_size = 6, # batch size
+    img_size = 128, # image size
+    device = "cuda", # device
+    num_workers=8, # number of workers for dataloader
+    num_frames=4, # number of frames to use as input
+    lr = 5e-4, # learning rate
+    validation_days=3, # number of days to use for validation
+    n_preds=8, # number of predictions to make 
+    log_every_epoch = 5, # log every n epochs to wandb
     )
+
+config.model_params = get_unet_params(config.model_name, config.num_frames)
 
 
 set_seed(config.seed)
@@ -72,6 +63,7 @@ def noisify(x0, ᾱ):
     return torch.cat([past_frames, xt], dim=1), t.to(device), ε
 
 def collate_ddpm(b): 
+    "Collate function that noisifies the last frame"
     return noisify(default_collate(b), alphabar)
 
 def dl_ddpm(dataset, shuffle=True): 
@@ -110,6 +102,7 @@ sampler = ddim_sampler(steps=config.sampler_steps)
 loss_func = torch.nn.MSELoss()
 
 def train_step(loss):
+    "Train for one step"
     optimizer.zero_grad()
     scaler.scale(loss).backward()
     scaler.step(optimizer)
@@ -117,6 +110,7 @@ def train_step(loss):
     scheduler.step()
 
 def one_epoch():
+    "Train for one epoch, log metrics and save model"
     model.train()
     pbar = progress_bar(train_dataloader, leave=False)
     for batch in pbar:
@@ -128,7 +122,6 @@ def one_epoch():
             wandb.log({"train_mse": loss.item(),
                         "learning_rate": scheduler.get_last_lr()[0]})
         pbar.comment = f"MSE={loss.item():2.3f}"
-
 
 def save_model(model_name):
     "Save the model to wandb"
@@ -142,11 +135,12 @@ def save_model(model_name):
     wandb.log_artifact(at)
 
 val_batch, _, _ = next(iter(valid_dataloader))  # grab a fixed batch to log predictions
-val_batch = val_batch[:config.n_preds].to(device)
+val_batch = val_batch[:min(config.n_preds, 8)].to(device)
 
 def fit(config):
     for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
-        # one_epoch(train=True)
+        # train
+        one_epoch()
         
         # log predicitons
         if epoch % config.log_every_epoch == 0:  
@@ -157,8 +151,11 @@ def fit(config):
     # save model
     save_model(config.model_name)
 
-run = wandb.init(project=PROJECT_NAME, config=config, tags=["test_refactor"])
+if __name__=="__main__":
+    parse_args(config)
 
-fit(config)
+    run = wandb.init(project=PROJECT_NAME, config=config, tags=["test_refactor", config.model_name])
 
-run.finish()
+    fit(config)
+
+    run.finish()
