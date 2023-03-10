@@ -16,7 +16,7 @@ from cloud_diffusion.dataset import download_dataset, CloudDataset
 from cloud_diffusion.utils import get_unet_params, init_ddpm, to_device, ddim_sampler, log_images, set_seed, parse_args
 
 
-PROJECT_NAME = "ddpm_clouds_debug"
+PROJECT_NAME = "ddpm_clouds"
 DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v0'
 
 config = SimpleNamespace(    
@@ -109,7 +109,7 @@ def train_step(loss):
     scaler.update()
     scheduler.step()
 
-def one_epoch():
+def one_epoch(epoch=None):
     "Train for one epoch, log metrics and save model"
     model.train()
     pbar = progress_bar(train_dataloader, leave=False)
@@ -121,7 +121,7 @@ def one_epoch():
             train_step(loss)
             wandb.log({"train_mse": loss.item(),
                         "learning_rate": scheduler.get_last_lr()[0]})
-        pbar.comment = f"MSE={loss.item():2.3f}"
+        pbar.comment = f"epoch={epoch}, MSE={loss.item():2.3f}"
 
 def save_model(model_name):
     "Save the model to wandb"
@@ -140,7 +140,7 @@ val_batch = val_batch[:min(config.n_preds, 8)].to(device)
 def fit(config):
     for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
         # train
-        one_epoch()
+        one_epoch(epoch)
         
         # log predicitons
         if epoch % config.log_every_epoch == 0:  
