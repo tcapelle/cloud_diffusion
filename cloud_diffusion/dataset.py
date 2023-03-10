@@ -12,7 +12,10 @@ PROJECT_NAME = "ddpm_clouds"
 DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v0'
 
 class CloudDataset:
-    
+    """Dataset for cloud images
+    It loads numpy files from wandb artifact and stacks them into a single array
+    It also applies some transformations to the images
+    """
     def __init__(self, 
                  files, # list of numpy files to load (they come from the artifact)
                  num_frames=4, # how many consecutive frames to stack
