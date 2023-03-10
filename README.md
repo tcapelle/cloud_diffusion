@@ -1,3 +1,7 @@
+[![](https://raw.githubusercontent.com/wandb/assets/main/wandb-github-badge-gradient.svg)](https://wandb.ai/capecape/ddpm_clouds)
+[![PyPI version](https://badge.fury.io/py/cloud_diffusion.svg)](https://badge.fury.io/py/cloud_diffusion)
+
+
 # Cloud Diffusion Experiment
 
 This codebase contains an implementation of a deep diffusion model applied to cloud images. It was developed as part of a research project exploring the potential of diffusion models
