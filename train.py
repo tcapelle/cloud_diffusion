@@ -13,7 +13,9 @@ from fastprogress import progress_bar
 from diffusers import UNet2DModel
 
 from cloud_diffusion.dataset import download_dataset, CloudDataset
-from cloud_diffusion.utils import get_unet_params, init_ddpm, to_device, ddim_sampler, log_images, set_seed, parse_args
+from cloud_diffusion.utils import (
+    save_model, get_unet_params, init_ddpm, to_device, 
+    ddim_sampler, log_images, set_seed, parse_args)
 
 
 PROJECT_NAME = "ddpm_clouds"
@@ -82,6 +84,8 @@ train_ds = CloudDataset(files=files[:-config.validation_days],
                         num_frames=config.num_frames, img_size=config.img_size)
 valid_ds = CloudDataset(files=files[-config.validation_days:], 
                         num_frames=config.num_frames, img_size=config.img_size)
+
+# DDPM dataloaders
 train_dataloader = dl_ddpm(train_ds, shuffle=True)
 valid_dataloader = dl_ddpm(valid_ds)
 
@@ -90,9 +94,9 @@ model = UNet2DModel(**config.model_params).to(device)
 init_ddpm(model)
 
 ## optim params
-total_steps = config.epochs * len(train_dataloader)
+config.total_train_steps = config.epochs * len(train_dataloader)
 optimizer = AdamW(model.parameters(), lr=config.lr, eps=1e-5)
-scheduler = OneCycleLR(optimizer, max_lr=config.lr, total_steps=total_steps)
+scheduler = OneCycleLR(optimizer, max_lr=config.lr, total_steps=config.total_train_steps)
 scaler = torch.cuda.amp.GradScaler()
 
 # sampler
@@ -114,48 +118,31 @@ def one_epoch(epoch=None):
     model.train()
     pbar = progress_bar(train_dataloader, leave=False)
     for batch in pbar:
+        frames, t, noise = to_device(batch, device=device)
         with torch.autocast("cuda"):
-            frames, t, noise = to_device(batch, device=device)
-            predicted_noise = model(frames, t,).sample ## this if for the Diffusers's UNet2DOutput class
+            predicted_noise = model(frames, t,).sample ## Diffusers's UNet2DOutput class
             loss = loss_func(noise, predicted_noise)
-            train_step(loss)
-            wandb.log({"train_mse": loss.item(),
-                        "learning_rate": scheduler.get_last_lr()[0]})
+        train_step(loss)
+        wandb.log({"train_mse": loss.item(),
+                   "learning_rate": scheduler.get_last_lr()[0]})
         pbar.comment = f"epoch={epoch}, MSE={loss.item():2.3f}"
-
-def save_model(model_name):
-    "Save the model to wandb"
-    model_name = f"{wandb.run.id}_{model_name}"
-    models_folder = Path("models")
-    if not models_folder.exists():
-        models_folder.mkdir()
-    torch.save(model.state_dict(), models_folder/f"{model_name}.pth")
-    at = wandb.Artifact(model_name, type="model")
-    at.add_file(f"models/{model_name}.pth")
-    wandb.log_artifact(at)
 
 val_batch, _, _ = next(iter(valid_dataloader))  # grab a fixed batch to log predictions
 val_batch = val_batch[:min(config.n_preds, 8)].to(device)
 
 def fit(config):
     for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
-        # train
         one_epoch(epoch)
         
         # log predicitons
         if epoch % config.log_every_epoch == 0:  
-            print(val_batch.shape)
             samples = sampler(model, past_frames=val_batch[:,:-1])
             log_images(val_batch, samples)
 
-    # save model
-    save_model(config.model_name)
+    save_model(model, config.model_name)
 
 if __name__=="__main__":
     parse_args(config)
-
     run = wandb.init(project=PROJECT_NAME, config=config, tags=["test_refactor", config.model_name])
-
     fit(config)
-
     run.finish()
