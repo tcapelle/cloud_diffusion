@@ -1,4 +1,4 @@
-[![](https://raw.githubusercontent.com/wandb/assets/main/wandb-github-badge-gradient.svg)](https://wandb.ai/capecape/ddpm_clouds)
+[![](https://raw.githubusercontent.com/wandb/assets/main/wandb-github-badge-gradient.svg)](https://wandb.ai/capecape/ddpm_clouds/reports/Diffusion-on-the-Clouds-Short-term-solar-energy-forecasting-with-Diffusion-Models--VmlldzozNDMxNTg5)
 [![PyPI version](https://badge.fury.io/py/cloud_diffusion.svg)](https://badge.fury.io/py/cloud_diffusion)
 
 
