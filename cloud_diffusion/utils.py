@@ -1,5 +1,4 @@
 import random, argparse
-from types import SimpleNamespace
 from pathlib import Path
 from functools import partial
 import fastcore.all as fc
@@ -7,11 +6,72 @@ import fastcore.all as fc
 import wandb
 import numpy as np
 import torch
+from torch import nn
 from torch.nn import init
 
 from fastprogress import progress_bar
 
 from diffusers.schedulers import DDIMScheduler
+
+
+class MiniTrainer:
+    "A mini trainer for the diffusion process"
+    def __init__(self, 
+                 train_dataloader, 
+                 valid_dataloader, 
+                 model, 
+                 optimizer, 
+                 scheduler, 
+                 sampler, 
+                 device="cuda", 
+                 loss_func=nn.MSELoss(), 
+                 ):
+        self.train_dataloader = train_dataloader
+        self.valid_dataloader = valid_dataloader
+        self.loss_func = loss_func
+        self.model = model
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        self.scaler = torch.cuda.amp.GradScaler()
+        self.device = device
+        self.sampler = sampler
+        self.val_batch = next(iter(valid_dataloader))[0].to(device)  # grab a fixed batch to log predictions
+        
+
+    def train_step(self, loss):
+        "Train for one step"
+        self.optimizer.zero_grad()
+        self.scaler.scale(loss).backward()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
+        self.scheduler.step()
+
+    def one_epoch(self, epoch=None):
+        "Train for one epoch, log metrics and save model"
+        self.model.train()
+        pbar = progress_bar(self.train_dataloader, leave=False)
+        for batch in pbar:
+            frames, t, noise = to_device(batch, device=self.device)
+            with torch.autocast("cuda"):
+                predicted_noise = self.model(frames, t,).sample ## Diffusers's UNet2DOutput class
+                loss = self.loss_func(noise, predicted_noise)
+            self.train_step(loss)
+            wandb.log({"train_mse": loss.item(),
+                       "learning_rate": self.scheduler.get_last_lr()[0]})
+            pbar.comment = f"epoch={epoch}, MSE={loss.item():2.3f}"
+   
+
+    def fit(self, config):
+        self.val_batch[:min(config.n_preds, 8)]  # log first 8 predictions
+        for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
+            self.one_epoch(epoch)
+            
+            # log predictions
+            if epoch % config.log_every_epoch == 0:  
+                samples = self.sampler(self.model, past_frames=self.val_batch[:,:-1])
+                log_images(self.val_batch, samples)
+
+        save_model(self.model, config.model_name)
 
 def get_unet_params(model_name="unet_small", num_frames=4):
     "Return the parameters for the diffusers UNet2d model"

@@ -13,6 +13,7 @@ from diffusers import UNet2DModel
 
 from cloud_diffusion.dataset import download_dataset, CloudDataset
 from cloud_diffusion.utils import (
+    MiniTrainer,
     save_model, get_unet_params, init_ddpm, to_device, 
     ddim_sampler, log_images, set_seed, parse_args)
 from cloud_diffusion.ddpm import collate_ddpm
@@ -75,44 +76,11 @@ sampler = ddim_sampler(steps=config.sampler_steps)
 # Metrics
 loss_func = torch.nn.MSELoss()
 
-def train_step(loss):
-    "Train for one step"
-    optimizer.zero_grad()
-    scaler.scale(loss).backward()
-    scaler.step(optimizer)
-    scaler.update()
-    scheduler.step()
-
-def one_epoch(epoch=None):
-    "Train for one epoch, log metrics and save model"
-    model.train()
-    pbar = progress_bar(train_dataloader, leave=False)
-    for batch in pbar:
-        frames, t, noise = to_device(batch, device=device)
-        with torch.autocast("cuda"):
-            predicted_noise = model(frames, t,).sample ## Diffusers's UNet2DOutput class
-            loss = loss_func(noise, predicted_noise)
-        train_step(loss)
-        wandb.log({"train_mse": loss.item(),
-                   "learning_rate": scheduler.get_last_lr()[0]})
-        pbar.comment = f"epoch={epoch}, MSE={loss.item():2.3f}"
-
-val_batch, _, _ = next(iter(valid_dataloader))  # grab a fixed batch to log predictions
-val_batch = val_batch[:min(config.n_preds, 8)].to(device)
-
-def fit(config):
-    for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
-        one_epoch(epoch)
-        
-        # log predicitons
-        if epoch % config.log_every_epoch == 0:  
-            samples = sampler(model, past_frames=val_batch[:,:-1])
-            log_images(val_batch, samples)
-
-    save_model(model, config.model_name)
+trainer = MiniTrainer(train_dataloader, valid_dataloader, model, optimizer, scheduler, 
+                      sampler, device, loss_func)
 
 if __name__=="__main__":
     parse_args(config)
     run = wandb.init(project=PROJECT_NAME, config=config, tags=["test_refactor", config.model_name])
-    fit(config)
+    trainer.fit(config)
     run.finish()
