@@ -6,16 +6,12 @@ import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import OneCycleLR
-
-from fastprogress import progress_bar
-
 from diffusers import UNet2DModel
 
 from cloud_diffusion.dataset import download_dataset, CloudDataset
 from cloud_diffusion.utils import (
-    MiniTrainer,
-    save_model, get_unet_params, init_ddpm, to_device, 
-    ddim_sampler, log_images, set_seed, parse_args)
+    MiniTrainer, get_unet_params, init_ddpm, 
+    ddim_sampler, set_seed, parse_args)
 from cloud_diffusion.ddpm import collate_ddpm
 
 
@@ -24,7 +20,7 @@ DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v0'
 
 config = SimpleNamespace(    
     epochs = 100, # number of epochs
-    model_name="unet_small", # model name to save [unet_small, unet_big, uvit]
+    model_name="unet_small", # model name to save [unet_small, unet_big]
     strategy="ddpm", # strategy to use [ddpm, simple_diffusion]
     noise_steps=1000, # number of noise steps on the diffusion process
     sampler_steps=333, # number of sampler steps on the diffusion process
@@ -68,7 +64,6 @@ init_ddpm(model)
 config.total_train_steps = config.epochs * len(train_dataloader)
 optimizer = AdamW(model.parameters(), lr=config.lr, eps=1e-5)
 scheduler = OneCycleLR(optimizer, max_lr=config.lr, total_steps=config.total_train_steps)
-scaler = torch.cuda.amp.GradScaler()
 
 # sampler
 sampler = ddim_sampler(steps=config.sampler_steps)
@@ -81,6 +76,6 @@ trainer = MiniTrainer(train_dataloader, valid_dataloader, model, optimizer, sche
 
 if __name__=="__main__":
     parse_args(config)
-    run = wandb.init(project=PROJECT_NAME, config=config, tags=["test_refactor", config.model_name])
+    run = wandb.init(project=PROJECT_NAME, config=config, tags=["ddpm", config.model_name])
     trainer.fit(config)
     run.finish()

@@ -162,4 +162,6 @@ cython_debug/
 # W&B
 wandb/
 artifacts/
+models/
+training_nbs/
 
