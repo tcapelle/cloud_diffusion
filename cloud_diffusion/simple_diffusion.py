@@ -11,7 +11,9 @@ from fastprogress import progress_bar
 from einops import repeat
 
 try:
-    from denoising_diffusion_pytorch.simple_diffusion import UViT, right_pad_dims_to, logsnr_schedule_cosine
+    from denoising_diffusion_pytorch.simple_diffusion import (
+        UViT, right_pad_dims_to, logsnr_schedule_cosine
+    )
 except:
     raise ImportError("Please install denoising_diffusion_pytorch with `pip install denoising_diffusion_pytorch`")
 
@@ -70,18 +72,7 @@ def get_uvit_params(model_name="uvit_small", num_frames=4):
     else:
         raise(f"Model name not found: {model_name}, choose between 'uvit_small' or 'uvit_big'")
     
-
-
-## Sampling functions
-def log(t, eps = 1e-20):
-    return torch.log(t.clamp(min = eps))
-
-
-def logsnr_schedule_cosine(t, logsnr_min = -15, logsnr_max = 15):
-    t_min = math.atan(math.exp(-0.5 * logsnr_max))
-    t_max = math.atan(math.exp(-0.5 * logsnr_min))
-    return -2 * log(torch.tan(t_min + t * (t_max - t_min)))
-
+# Sampling functions
 
 @torch.no_grad()
 def forward(model, past_frames, x, t):
