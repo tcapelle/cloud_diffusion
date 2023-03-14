@@ -66,9 +66,17 @@ class CloudDataset:
 
 def download_dataset(at_name, project_name):
     "Downloads dataset from wandb artifact"
-    with wandb.init(project=project_name, job_type="download_dataset"):
-        artifact = wandb.use_artifact(at_name, type='dataset')
-        artifact_dir = artifact.download()
+    def _get_dataset(run):
+        artifact = run.use_artifact(at_name, type='dataset')
+        return artifact.download()
+
+    if wandb.run is not None:
+        run = wandb.run
+        artifact_dir = _get_dataset(run)
+    else:
+        run = wandb.init(project=project_name, job_type="download_dataset")
+        artifact_dir = _get_dataset(run)
+        run.finish()
 
     files = ls(Path(artifact_dir))
     return files
