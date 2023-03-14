@@ -53,7 +53,7 @@ class MiniTrainer:
         for batch in pbar:
             frames, t, noise = to_device(batch, device=self.device)
             with torch.autocast("cuda"):
-                predicted_noise = self.model(frames, t,).sample ## Diffusers's UNet2DOutput class
+                predicted_noise = self.model(frames, t)
                 loss = self.loss_func(noise, predicted_noise)
             self.train_step(loss)
             wandb.log({"train_mse": loss.item(),
@@ -73,24 +73,6 @@ class MiniTrainer:
 
         save_model(self.model, config.model_name)
 
-def get_unet_params(model_name="unet_small", num_frames=4):
-    "Return the parameters for the diffusers UNet2d model"
-    if model_name == "unet_small":
-        return dict(
-            block_out_channels=(16, 32, 64, 128), # number of channels for each block
-            norm_num_groups=8, # number of groups for the normalization layer
-            in_channels=num_frames, # number of input channels
-            out_channels=1, # number of output channels
-            )
-    elif model_name == "unet_big":
-        return dict(
-            block_out_channels=(32, 64, 128, 256), # number of channels for each block
-            norm_num_groups=8, # number of groups for the normalization layer
-            in_channels=num_frames, # number of input channels
-            out_channels=1, # number of output channels
-            )
-    else:
-        raise(f"Model name not found: {model_name}, choose between 'unet_small' or 'unet_big'")
 
 def set_seed(s, reproducible=False):
     "Set random seed for `random`, `torch`, and `numpy` (where available)"
@@ -131,7 +113,7 @@ def init_ddpm(model):
     model.conv_out.weight.data.zero_()
 
 @torch.no_grad()
-def diff_sample(model, past_frames, sched, **kwargs):
+def diffusers_sampler(model, past_frames, sched, **kwargs):
     "Using Diffusers built-in samplers"
     model.eval()
     device = next(model.parameters()).device
@@ -141,13 +123,13 @@ def diff_sample(model, past_frames, sched, **kwargs):
         noise = model(torch.cat([past_frames, new_frame], dim=1), t).sample
         new_frame = sched.step(noise, t, new_frame, **kwargs).prev_sample
         preds.append(new_frame.float().cpu())
-    return preds
+    return preds[-1]
 
 def ddim_sampler(steps=350, eta=1.):
     "DDIM sampler, faster and a bit better than the built-in sampler"
     ddim_sched = DDIMScheduler()
     ddim_sched.set_timesteps(steps)
-    return partial(diff_sample, sched=ddim_sched, eta=eta)
+    return partial(diffusers_sampler, sched=ddim_sched, eta=eta)
 
 
 ## Wandb functions
@@ -158,9 +140,8 @@ def to_wandb_image(img):
 
 def log_images(xt, samples):
     "Log sampled images to wandb"
-    predicted = samples[-1]
-    device = predicted.device
-    frames = torch.cat([xt[:, :-1,...].to(device), samples[-1]], dim=1)
+    device = samples.device
+    frames = torch.cat([xt[:, :-1,...].to(device), samples], dim=1)
     wandb.log({"sampled_images": [to_wandb_image(img) for img in frames]})
 
 def save_model(model, model_name):

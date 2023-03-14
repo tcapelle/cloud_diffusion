@@ -1,6 +1,8 @@
 import torch
 from torch.utils.data.dataloader import default_collate
 
+from diffusers import UNet2DModel
+
 
 ## DDPM params
 ## From fastai V2 Course DDPM notebooks
@@ -26,3 +28,25 @@ def collate_ddpm(b):
     "Collate function that noisifies the last frame"
     return noisify(default_collate(b), alphabar)
 
+def get_unet_params(model_name="unet_small", num_frames=4):
+    "Return the parameters for the diffusers UNet2d model"
+    if model_name == "unet_small":
+        return dict(
+            block_out_channels=(16, 32, 64, 128), # number of channels for each block
+            norm_num_groups=8, # number of groups for the normalization layer
+            in_channels=num_frames, # number of input channels
+            out_channels=1, # number of output channels
+            )
+    elif model_name == "unet_big":
+        return dict(
+            block_out_channels=(32, 64, 128, 256), # number of channels for each block
+            norm_num_groups=8, # number of groups for the normalization layer
+            in_channels=num_frames, # number of input channels
+            out_channels=1, # number of output channels
+            )
+    else:
+        raise(f"Model name not found: {model_name}, choose between 'unet_small' or 'unet_big'")
+
+class UNet2D(UNet2DModel):
+    def forward(self, *x, **kwargs):
+        return super().forward(*x, **kwargs).sample ## Diffusers's UNet2DOutput class

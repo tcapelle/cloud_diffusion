@@ -6,13 +6,13 @@ import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import OneCycleLR
-from diffusers import UNet2DModel
+
 
 from cloud_diffusion.dataset import download_dataset, CloudDataset
 from cloud_diffusion.utils import (
-    MiniTrainer, get_unet_params, init_ddpm, 
+    MiniTrainer, init_ddpm, 
     ddim_sampler, set_seed, parse_args)
-from cloud_diffusion.ddpm import collate_ddpm
+from cloud_diffusion.ddpm import collate_ddpm, get_unet_params, UNet2D
 
 
 PROJECT_NAME = "ddpm_clouds"
@@ -57,7 +57,7 @@ valid_dataloader = DataLoader(valid_ds, config.batch_size, shuffle=False,
                               collate_fn=collate_fn,  num_workers=config.num_workers)
 
 # model setup
-model = UNet2DModel(**config.model_params).to(device)
+model = UNet2D(**config.model_params).to(device)
 init_ddpm(model)
 
 ## optim params
