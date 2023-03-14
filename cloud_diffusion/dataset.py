@@ -30,7 +30,7 @@ class CloudDataset:
         
         
         data = []
-        for file in progress_bar(files, leave=False):
+        for file in (pbar:=progress_bar(files, leave=False)):
             one_day = np.load(file)
             if scale:
                 one_day = 0.5 - self._scale(one_day)
@@ -40,8 +40,16 @@ class CloudDataset:
                 num_frames, 
                 axis=0).transpose((0,3,1,2))
             data.append(wds)
+            pbar.comment = f"Creating CloudDataset from {file}"
         self.data = np.concatenate(data, axis=0)
-            
+    
+    def shuffle(self):
+        """Shuffles the dataset, useful for getting 
+        interesting samples on the validation dataset"""
+        idxs = torch.randperm(len(self.data))
+        self.data = self.data[idxs]
+        return self
+
     @staticmethod
     def _scale(arr):
         "Scales values of array in [0,1]"
