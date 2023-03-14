@@ -16,7 +16,7 @@ from cloud_diffusion.ddpm import collate_ddpm
 
 
 PROJECT_NAME = "ddpm_clouds"
-DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v0'
+DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v1'
 
 config = SimpleNamespace(    
     epochs = 100, # number of epochs
