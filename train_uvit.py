@@ -13,7 +13,7 @@ from cloud_diffusion.utils import (
     MiniTrainer, set_seed, parse_args)
 from cloud_diffusion.simple_diffusion import UViT, collate_simple_diffusion, get_uvit_params, simple_diffusion_sampler
 
-
+DEBUG = False
 PROJECT_NAME = "ddpm_clouds"
 DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v1'
 
@@ -35,48 +35,49 @@ config = SimpleNamespace(
     log_every_epoch = 5, # log every n epochs to wandb
     )
 
-config.model_params = get_uvit_params(config.model_name, config.num_frames)
+def train_func(config):
+    config.model_params = get_uvit_params(config.model_name, config.num_frames)
 
-set_seed(config.seed)
-device = torch.device(config.device)
+    set_seed(config.seed)
+    device = torch.device(config.device)
 
-# downlaod the dataset from the wandb.Artifact
-files = download_dataset(DATASET_ARTIFACT, PROJECT_NAME)
+    # downlaod the dataset from the wandb.Artifact
+    files = download_dataset(DATASET_ARTIFACT, PROJECT_NAME)
 
-files = files[0:5]
+    files = files[0:5] if DEBUG else files
 
-train_ds = CloudDataset(files=files[:-config.validation_days],  
-                        num_frames=config.num_frames, img_size=config.img_size)
-valid_ds = CloudDataset(files=files[-config.validation_days:], 
-                        num_frames=config.num_frames, img_size=config.img_size).suffle()
+    train_ds = CloudDataset(files=files[:-config.validation_days],  
+                            num_frames=config.num_frames, img_size=config.img_size)
+    valid_ds = CloudDataset(files=files[-config.validation_days:], 
+                            num_frames=config.num_frames, img_size=config.img_size).shuffle()
 
-collate_fn = collate_simple_diffusion
+    collate_fn = collate_simple_diffusion
 
-# DDPM dataloaders
-train_dataloader = DataLoader(train_ds, config.batch_size, shuffle=True, 
-                              collate_fn=collate_fn,  num_workers=config.num_workers)
-valid_dataloader = DataLoader(valid_ds, config.batch_size, shuffle=False, 
-                              collate_fn=collate_fn,  num_workers=config.num_workers)
+    # DDPM dataloaders
+    train_dataloader = DataLoader(train_ds, config.batch_size, shuffle=True, 
+                                collate_fn=collate_fn,  num_workers=config.num_workers)
+    valid_dataloader = DataLoader(valid_ds, config.batch_size, shuffle=False, 
+                                collate_fn=collate_fn,  num_workers=config.num_workers)
 
-# model setup
-model = UViT(**config.model_params).to(device)
+    # model setup
+    model = UViT(**config.model_params).to(device)
 
-## optim params
-config.total_train_steps = config.epochs * len(train_dataloader)
-optimizer = AdamW(model.parameters(), lr=config.lr, eps=1e-5)
-scheduler = OneCycleLR(optimizer, max_lr=config.lr, total_steps=config.total_train_steps)
+    ## optim params
+    config.total_train_steps = config.epochs * len(train_dataloader)
+    optimizer = AdamW(model.parameters(), lr=config.lr, eps=1e-5)
+    scheduler = OneCycleLR(optimizer, max_lr=config.lr, total_steps=config.total_train_steps)
 
-# sampler
-sampler = simple_diffusion_sampler(steps=config.sampler_steps)
+    # sampler
+    sampler = simple_diffusion_sampler(steps=config.sampler_steps)
 
-# Metrics
-loss_func = torch.nn.MSELoss()
+    # Metrics
+    loss_func = torch.nn.MSELoss()
 
-trainer = MiniTrainer(train_dataloader, valid_dataloader, model, optimizer, scheduler, 
-                      sampler, device, loss_func)
+    trainer = MiniTrainer(train_dataloader, valid_dataloader, model, optimizer, scheduler, 
+                        sampler, device, loss_func)
+    trainer.fit(config)
 
 if __name__=="__main__":
     parse_args(config)
-    run = wandb.init(project=PROJECT_NAME, config=config, tags=["ddpm", config.model_name])
-    trainer.fit(config)
-    run.finish()
+    with wandb.init(project=PROJECT_NAME, config=config, tags=["sd", config.model_name]):
+        train_func(config)
