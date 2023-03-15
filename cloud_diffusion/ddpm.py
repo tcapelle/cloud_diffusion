@@ -1,16 +1,11 @@
-from pathlib import Path
 from functools import partial
 
-import torch, wandb
-from torch.nn import init
+import torch
 from torch.utils.data.dataloader import default_collate
 
-import fastcore.all as fc
 from fastprogress import progress_bar
 
 from diffusers.schedulers import DDIMScheduler
-
-from diffusers import UNet2DModel
 
 
 ## DDPM params
@@ -37,37 +32,6 @@ def collate_ddpm(b):
     "Collate function that noisifies the last frame"
     return noisify(default_collate(b), alphabar)
 
-def get_unet_params(model_name="unet_small", num_frames=4):
-    "Return the parameters for the diffusers UNet2d model"
-    if model_name == "unet_small":
-        return dict(
-            block_out_channels=(16, 32, 64, 128), # number of channels for each block
-            norm_num_groups=8, # number of groups for the normalization layer
-            in_channels=num_frames, # number of input channels
-            out_channels=1, # number of output channels
-            )
-    elif model_name == "unet_big":
-        return dict(
-            block_out_channels=(32, 64, 128, 256), # number of channels for each block
-            norm_num_groups=8, # number of groups for the normalization layer
-            in_channels=num_frames, # number of input channels
-            out_channels=1, # number of output channels
-            )
-    else:
-        raise(f"Model name not found: {model_name}, choose between 'unet_small' or 'unet_big'")
-
-def init_ddpm(model):
-    "From Jeremy's bag of tricks on fastai V2 2023"
-    for o in model.down_blocks:
-        for p in o.resnets:
-            p.conv2.weight.data.zero_()
-            for p in fc.L(o.downsamplers): init.orthogonal_(p.conv.weight)
-
-    for o in model.up_blocks:
-        for p in o.resnets: p.conv2.weight.data.zero_()
-
-    model.conv_out.weight.data.zero_()
-
 @torch.no_grad()
 def diffusers_sampler(model, past_frames, sched, **kwargs):
     "Using Diffusers built-in samplers"
@@ -88,23 +52,3 @@ def ddim_sampler(steps=350, eta=1.):
     ddim_sched = DDIMScheduler()
     ddim_sched.set_timesteps(steps)
     return partial(diffusers_sampler, sched=ddim_sched, eta=eta)
-
-class UNet2D(UNet2DModel):
-    def forward(self, *x, **kwargs):
-        return super().forward(*x, **kwargs).sample ## Diffusers's UNet2DOutput class
-    
-    @classmethod
-    def from_checkpoint(cls, model_params, checkpoint_file):
-        "Load a UNet2D model from a checkpoint file"
-        model = cls(**model_params)
-        model.load_state_dict(torch.load(checkpoint_file, map_location="cpu"))
-        return model
-
-
-    @classmethod
-    def from_artifact(cls, model_params, artifact_name):
-        "Load a UNet2D model from a wandb.Artifact, need to be run in a wandb run"
-        artifact = wandb.use_artifact(artifact_name, type='model')
-        artifact_dir = Path(artifact.download())
-        chpt_file = list(artifact_dir.glob("*.pth"))[0]
-        return cls.from_checkpoint(model_params, chpt_file)

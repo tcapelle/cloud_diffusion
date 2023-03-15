@@ -5,11 +5,19 @@ import wandb
 import numpy as np
 import torch
 from torch import nn
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import OneCycleLR
 
 from fastprogress import progress_bar
 
 from cloud_diffusion.wandb import log_images, save_model
 
+def noisify_last_frame(frames, noise_func):
+    "Noisify the last frame of a sequence"
+    past_frames = frames[:,:-1]
+    last_frame  = frames[:,-1:]
+    noise = noise_func(last_frame)
+    return torch.cat([past_frames, noise], dim=1)
 
 class MiniTrainer:
     "A mini trainer for the diffusion process"
@@ -17,8 +25,6 @@ class MiniTrainer:
                  train_dataloader, 
                  valid_dataloader, 
                  model, 
-                 optimizer, 
-                 scheduler, 
                  sampler, 
                  device="cuda", 
                  loss_func=nn.MSELoss(), 
@@ -26,14 +32,12 @@ class MiniTrainer:
         self.train_dataloader = train_dataloader
         self.valid_dataloader = valid_dataloader
         self.loss_func = loss_func
-        self.model = model
-        self.optimizer = optimizer
-        self.scheduler = scheduler
+        self.model = model.to(device)
         self.scaler = torch.cuda.amp.GradScaler()
         self.device = device
         self.sampler = sampler
         self.val_batch = next(iter(valid_dataloader))[0].to(device)  # grab a fixed batch to log predictions
-
+    
     def train_step(self, loss):
         "Train for one step"
         self.optimizer.zero_grad()
@@ -56,8 +60,14 @@ class MiniTrainer:
                        "learning_rate": self.scheduler.get_last_lr()[0]})
             pbar.comment = f"epoch={epoch}, MSE={loss.item():2.3f}"
    
+    def prepare(self, config):
+        wandb.config.update(config)
+        config.total_train_steps = config.epochs * len(self.train_dataloader)
+        self.optimizer = AdamW(self.model.parameters(), lr=config.lr, eps=1e-5)
+        self.scheduler = OneCycleLR(self.optimizer, max_lr=config.lr, total_steps=config.total_train_steps)
 
     def fit(self, config):
+        self.prepare(config)
         self.val_batch = self.val_batch[:min(config.n_preds, 8)]  # log first 8 predictions
         for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
             self.one_epoch(epoch)

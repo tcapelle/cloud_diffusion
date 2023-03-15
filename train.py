@@ -4,13 +4,11 @@ from types import SimpleNamespace
 import wandb
 import torch
 from torch.utils.data import DataLoader
-from torch.optim import AdamW
-from torch.optim.lr_scheduler import OneCycleLR
-
 
 from cloud_diffusion.dataset import download_dataset, CloudDataset
 from cloud_diffusion.utils import MiniTrainer, set_seed, parse_args
-from cloud_diffusion.ddpm import collate_ddpm, get_unet_params, UNet2D, init_ddpm, ddim_sampler
+from cloud_diffusion.ddpm import collate_ddpm, ddim_sampler
+from cloud_diffusion.models import UNet2D, get_unet_params
 
 
 PROJECT_NAME = "ddpm_clouds"
@@ -42,10 +40,9 @@ def train_func(config):
 
     # downlaod the dataset from the wandb.Artifact
     files = download_dataset(DATASET_ARTIFACT, PROJECT_NAME)
-    train_ds = CloudDataset(files=files[:-config.validation_days],  
-                            num_frames=config.num_frames, img_size=config.img_size)
-    valid_ds = CloudDataset(files=files[-config.validation_days:], 
-                            num_frames=config.num_frames, img_size=config.img_size).shuffle()
+    train_days, valid_days = files[:-config.validation_days], files[-config.validation_days:]
+    train_ds = CloudDataset(files=train_days, num_frames=config.num_frames, img_size=config.img_size)
+    valid_ds = CloudDataset(files=valid_days, num_frames=config.num_frames, img_size=config.img_size).shuffle()
 
     collate_fn = collate_ddpm
 
@@ -56,23 +53,13 @@ def train_func(config):
                                 collate_fn=collate_fn,  num_workers=config.num_workers)
 
     # model setup
-    model = UNet2D(**config.model_params).to(device)
-    init_ddpm(model)
-
-    ## optim params
-    config.total_train_steps = config.epochs * len(train_dataloader)
-    optimizer = AdamW(model.parameters(), lr=config.lr, eps=1e-5)
-    scheduler = OneCycleLR(optimizer, max_lr=config.lr, total_steps=config.total_train_steps)
+    model = UNet2D(**config.model_params)
 
     # sampler
     sampler = ddim_sampler(steps=config.sampler_steps)
 
-    # Metrics
-    loss_func = torch.nn.MSELoss()
-
-    trainer = MiniTrainer(train_dataloader, valid_dataloader, model, optimizer, scheduler, 
-                          sampler, device, loss_func)
-    wandb.config.update(config)
+    # A simple training loop
+    trainer = MiniTrainer(train_dataloader, valid_dataloader, model, sampler, device)
     trainer.fit(config)
     
 

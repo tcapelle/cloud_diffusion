@@ -11,6 +11,20 @@ from cloud_diffusion.utils import ls
 PROJECT_NAME = "ddpm_clouds"
 DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v0'
 
+class DummyNextFrameDataset:
+    "Dataset that returns random images"
+    def __init__(self, num_frames=4, img_size=64, N=1000):
+        self.img_size = img_size
+        self.num_frames = num_frames
+        self.N = N
+
+    def __getitem__(self, idx):
+        return torch.randn(self.num_frames, self.img_size, self.img_size)
+    
+    def __len__(self):
+        return self.N
+
+
 class CloudDataset:
     """Dataset for cloud images
     It loads numpy files from wandb artifact and stacks them into a single array

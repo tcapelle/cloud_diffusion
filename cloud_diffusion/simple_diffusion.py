@@ -1,9 +1,8 @@
 from functools import partial
 
-import torch, math
-from torch import nn, sqrt
+import torch
+from torch import sqrt
 from torch.special import expm1
-from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 
 from fastprogress import progress_bar
@@ -11,9 +10,7 @@ from fastprogress import progress_bar
 from einops import repeat
 
 try:
-    from denoising_diffusion_pytorch.simple_diffusion import (
-        UViT, right_pad_dims_to, logsnr_schedule_cosine
-    )
+    from denoising_diffusion_pytorch.simple_diffusion import right_pad_dims_to, logsnr_schedule_cosine
 except:
     raise ImportError("Please install denoising_diffusion_pytorch with `pip install denoising_diffusion_pytorch`")
 
@@ -48,29 +45,6 @@ def noisify(frames, pred_objective="v"):
 def collate_simple_diffusion(b): 
     "Collate function that noisifies the last frame"
     return noisify(default_collate(b))
-
-def get_uvit_params(model_name="uvit_small", num_frames=4):
-    "Return the parameters for the diffusers UViT model"
-    if model_name == "uvit_small":
-        return dict(
-            dim=512,
-            ff_mult=2,
-            vit_depth=4,
-            channels=4, 
-            patch_size=4,
-            final_img_itransform=nn.Conv2d(num_frames,1,1)
-            )
-    elif model_name == "uvit_big":
-        return dict(
-            dim=1024,
-            ff_mult=4,
-            vit_depth=8,
-            channels=4, 
-            patch_size=4,
-            final_img_itransform=nn.Conv2d(num_frames,1,1)
-            )
-    else:
-        raise(f"Model name not found: {model_name}, choose between 'uvit_small' or 'uvit_big'")
     
 # Sampling functions
 
@@ -138,4 +112,4 @@ def p_sample_loop(model, past_frames, steps=500):
 def simple_diffusion_sampler(steps=500):
     """Returns a function that samples from the diffusion model using
     the simple diffusion sampling scheme"""
-    return partial(p_sample_loop, steps=500)
+    return partial(p_sample_loop, steps=steps)

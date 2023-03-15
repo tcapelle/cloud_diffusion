@@ -36,6 +36,7 @@ class Inference:
 
     def __init__(self, config):
         self.config = config
+        set_seed(config.seed)
 
         # create a batch of data to use for inference
         self.prepare_data()
