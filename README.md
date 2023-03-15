@@ -31,6 +31,14 @@ This training is based on a Transformer based Unet (UViT), you can train the def
 > python train_uvit.py
 ```
 
+## Running Inference
+If you are only interested on using the trained models, you can run inference by running:
+
+```bash
+> python inference.py  --future_frames 10 --num_random_experiments 2
+```
+
+This will generate 10 future frames for 2 random experiments.
 
 ## License
 

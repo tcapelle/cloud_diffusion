@@ -27,14 +27,19 @@ class CloudDataset:
         tfms = [T.Resize((img_size, int(img_size*1.7)))] if img_size is not None else []
         tfms += [T.RandomCrop(img_size)] if not valid else [T.CenterCrop(img_size)]
         self.tfms = T.Compose(tfms)
+        self.load_data(files, num_frames, scale)
         
-        
+    def load_day(self, file, scale=True):
+        one_day = np.load(file)
+        if scale:
+            one_day = 0.5 - self._scale(one_day)
+        return one_day
+
+    def load_data(self, files, num_frames, scale):
+        "Loads all data into a single array self.data"
         data = []
         for file in (pbar:=progress_bar(files, leave=False)):
-            one_day = np.load(file)
-            if scale:
-                one_day = 0.5 - self._scale(one_day)
-        
+            one_day = self.load_day(file, scale)
             wds = np.lib.stride_tricks.sliding_window_view(
                 one_day.squeeze(), 
                 num_frames, 
@@ -42,7 +47,7 @@ class CloudDataset:
             data.append(wds)
             pbar.comment = f"Creating CloudDataset from {file}"
         self.data = np.concatenate(data, axis=0)
-    
+
     def shuffle(self):
         """Shuffles the dataset, useful for getting 
         interesting samples on the validation dataset"""
@@ -63,6 +68,19 @@ class CloudDataset:
 
     def save(self, fname="cloud_frames.npy"):
         np.save(fname, self.data)
+
+
+class CloudDatasetInference(CloudDataset):
+     def load_data(self, files, num_frames=None, scale=None):
+        "Loads all data into a single array self.data"
+        data = []
+        max_length = 100
+        for file in files:
+            one_day = self.load_day(file, scale)
+            data.append(one_day)
+            max_length = min(max_length, len(one_day))
+        self.data = np.stack([d[:max_length] for d in data], axis=0).squeeze()
+
 
 def download_dataset(at_name, project_name):
     "Downloads dataset from wandb artifact"

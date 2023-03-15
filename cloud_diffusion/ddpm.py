@@ -54,9 +54,18 @@ class UNet2D(UNet2DModel):
         return super().forward(*x, **kwargs).sample ## Diffusers's UNet2DOutput class
     
     @classmethod
-    def from_artifact(cls, model_params, artifact_name):
-        "Load a UNet2D model from a wandb.Artifact"
+    def from_checkpoint(cls, model_params, checkpoint_file):
+        "Load a UNet2D model from a checkpoint file"
         model = cls(**model_params)
+        print(f"Loading model from: {checkpoint_file}")
+        model.load_state_dict(torch.load(checkpoint_file))
+        return model
+
+
+    @classmethod
+    def from_artifact(cls, model_params, artifact_name):
+        "Load a UNet2D model from a wandb.Artifact, need to be run in a wandb run"
         artifact = wandb.use_artifact(artifact_name, type='model')
         artifact_dir = Path(artifact.download())
-        return model.load_state_dict(torch.load(list(artifact_dir.glob("*.pth"))[0]))
+        chpt_file = list(artifact_dir.glob("*.pth"))[0]
+        return cls.from_checkpoint(model_params, chpt_file)
