@@ -75,6 +75,7 @@ def train_func(config):
 
     trainer = MiniTrainer(train_dataloader, valid_dataloader, model, optimizer, scheduler, 
                         sampler, device, loss_func)
+    wandb.config.update(config)
     trainer.fit(config)
 
 if __name__=="__main__":

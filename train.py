@@ -9,10 +9,8 @@ from torch.optim.lr_scheduler import OneCycleLR
 
 
 from cloud_diffusion.dataset import download_dataset, CloudDataset
-from cloud_diffusion.utils import (
-    MiniTrainer, init_ddpm, 
-    ddim_sampler, set_seed, parse_args)
-from cloud_diffusion.ddpm import collate_ddpm, get_unet_params, UNet2D
+from cloud_diffusion.utils import MiniTrainer, set_seed, parse_args
+from cloud_diffusion.ddpm import collate_ddpm, get_unet_params, UNet2D, init_ddpm, ddim_sampler
 
 
 PROJECT_NAME = "ddpm_clouds"

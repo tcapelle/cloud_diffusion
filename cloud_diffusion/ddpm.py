@@ -1,7 +1,14 @@
 from pathlib import Path
+from functools import partial
 
 import torch, wandb
+from torch.nn import init
 from torch.utils.data.dataloader import default_collate
+
+import fastcore.all as fc
+from fastprogress import progress_bar
+
+from diffusers.schedulers import DDIMScheduler
 
 from diffusers import UNet2DModel
 
@@ -48,6 +55,37 @@ def get_unet_params(model_name="unet_small", num_frames=4):
             )
     else:
         raise(f"Model name not found: {model_name}, choose between 'unet_small' or 'unet_big'")
+
+def init_ddpm(model):
+    "From Jeremy's bag of tricks on fastai V2 2023"
+    for o in model.down_blocks:
+        for p in o.resnets:
+            p.conv2.weight.data.zero_()
+            for p in fc.L(o.downsamplers): init.orthogonal_(p.conv.weight)
+
+    for o in model.up_blocks:
+        for p in o.resnets: p.conv2.weight.data.zero_()
+
+    model.conv_out.weight.data.zero_()
+
+@torch.no_grad()
+def diffusers_sampler(model, past_frames, sched, **kwargs):
+    "Using Diffusers built-in samplers"
+    model.eval()
+    device = next(model.parameters()).device
+    new_frame = torch.randn_like(past_frames[:,-1:], dtype=past_frames.dtype, device=device)
+    preds = []
+    for t in progress_bar(sched.timesteps, leave=False):
+        noise = model(torch.cat([past_frames, new_frame], dim=1), t)
+        new_frame = sched.step(noise, t, new_frame, **kwargs).prev_sample
+        preds.append(new_frame.float().cpu())
+    return preds[-1]
+
+def ddim_sampler(steps=350, eta=1.):
+    "DDIM sampler, faster and a bit better than the built-in sampler"
+    ddim_sched = DDIMScheduler()
+    ddim_sched.set_timesteps(steps)
+    return partial(diffusers_sampler, sched=ddim_sched, eta=eta)
 
 class UNet2D(UNet2DModel):
     def forward(self, *x, **kwargs):
