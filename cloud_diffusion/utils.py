@@ -6,7 +6,9 @@ import numpy as np
 import torch
 from torch import nn
 from torch.optim import AdamW
+from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import OneCycleLR
+from torch.utils.data.dataloader import default_collate
 
 from fastprogress import progress_bar
 
@@ -16,8 +18,18 @@ def noisify_last_frame(frames, noise_func):
     "Noisify the last frame of a sequence"
     past_frames = frames[:,:-1]
     last_frame  = frames[:,-1:]
-    noise = noise_func(last_frame)
-    return torch.cat([past_frames, noise], dim=1)
+    noise, t, e = noise_func(last_frame)
+    return torch.cat([past_frames, noise], dim=1), t, e
+
+class NoisifyDataloader(DataLoader):
+    """Noisify the last frame of a dataloader by applying 
+    a noise function, after collating the batch"""
+    def __init__(self, dataset, *args, noise_func=None, **kwargs):
+        self.noise_func = noise_func
+        def noisify_collate(b): 
+            "Collate function that noisifies the last frame"
+            return noisify_last_frame(default_collate(b), noise_func)
+        super().__init__(dataset, *args, collate_fn=noisify_collate, **kwargs)
 
 class MiniTrainer:
     "A mini trainer for the diffusion process"

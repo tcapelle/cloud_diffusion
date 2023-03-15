@@ -6,8 +6,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from cloud_diffusion.dataset import download_dataset, CloudDataset
-from cloud_diffusion.utils import MiniTrainer, set_seed, parse_args
-from cloud_diffusion.ddpm import collate_ddpm, ddim_sampler
+from cloud_diffusion.utils import NoisifyDataloader, MiniTrainer, set_seed, parse_args
+from cloud_diffusion.ddpm import noisify_ddpm, ddim_sampler
 from cloud_diffusion.models import UNet2D, get_unet_params
 
 
@@ -44,13 +44,11 @@ def train_func(config):
     train_ds = CloudDataset(files=train_days, num_frames=config.num_frames, img_size=config.img_size)
     valid_ds = CloudDataset(files=valid_days, num_frames=config.num_frames, img_size=config.img_size).shuffle()
 
-    collate_fn = collate_ddpm
-
     # DDPM dataloaders
-    train_dataloader = DataLoader(train_ds, config.batch_size, shuffle=True, 
-                                collate_fn=collate_fn,  num_workers=config.num_workers)
-    valid_dataloader = DataLoader(valid_ds, config.batch_size, shuffle=False, 
-                                collate_fn=collate_fn,  num_workers=config.num_workers)
+    train_dataloader = NoisifyDataloader(train_ds, config.batch_size, shuffle=True, 
+                                         noise_func=noisify_ddpm,  num_workers=config.num_workers)
+    valid_dataloader = NoisifyDataloader(valid_ds, config.batch_size, shuffle=False, 
+                                          noise_func=noisify_ddpm,  num_workers=config.num_workers)
 
     # model setup
     model = UNet2D(**config.model_params)

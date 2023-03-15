@@ -1,8 +1,6 @@
 from functools import partial
 
 import torch
-from torch.utils.data.dataloader import default_collate
-
 from fastprogress import progress_bar
 
 from diffusers.schedulers import DDIMScheduler
@@ -16,21 +14,15 @@ alpha = 1.-beta
 alphabar = alpha.cumprod(dim=0)
 sigma = beta.sqrt()
 
-def noisify(x0, ᾱ):
-    "Noise only the last frame"
-    past_frames = x0[:,:-1]
-    x0 = x0[:,-1:]
+def noisify_ddpm(x0):
+    "Noise by ddpm"
     device = x0.device
     n = len(x0)
     t = torch.randint(0, n_steps, (n,), dtype=torch.long)
     ε = torch.randn(x0.shape, device=device)
-    ᾱ_t = ᾱ[t].reshape(-1, 1, 1, 1).to(device)
+    ᾱ_t = alphabar[t].reshape(-1, 1, 1, 1).to(device)
     xt = ᾱ_t.sqrt()*x0 + (1-ᾱ_t).sqrt()*ε
-    return torch.cat([past_frames, xt], dim=1), t.to(device), ε
-
-def collate_ddpm(b): 
-    "Collate function that noisifies the last frame"
-    return noisify(default_collate(b), alphabar)
+    return xt, t.to(device), ε
 
 @torch.no_grad()
 def diffusers_sampler(model, past_frames, sched, **kwargs):

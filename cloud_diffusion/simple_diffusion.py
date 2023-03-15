@@ -3,7 +3,6 @@ from functools import partial
 import torch
 from torch import sqrt
 from torch.special import expm1
-from torch.utils.data.dataloader import default_collate
 
 from fastprogress import progress_bar
 
@@ -23,28 +22,24 @@ def q_sample(x_start, times, noise):
 
     return x_noised, log_snr
 
-def noisify(frames, pred_objective="v"):
-    past_frames = frames[:,:-1]
-    last_frame  = frames[:,-1:]
-    device = frames.device
+def noisify_uvit(x0, pred_objective="v"):
+    device = x0.device
     
-    noise =  torch.randn_like(last_frame)
-    times = torch.zeros((last_frame.shape[0],), device = device).float().uniform_(0, 1)
-    x, log_snr = q_sample(last_frame, times, noise)
+    noise =  torch.randn_like(x0)
+    times = torch.zeros((x0.shape[0],), device = device).float().uniform_(0, 1)
+    x, log_snr = q_sample(x0, times, noise)
     
     if pred_objective == 'v':
         padded_log_snr = right_pad_dims_to(x, log_snr)
         alpha, sigma = padded_log_snr.sigmoid().sqrt(), (-padded_log_snr).sigmoid().sqrt()
-        target = alpha * noise - sigma * last_frame
+        target = alpha * noise - sigma * x0
 
     elif pred_objective == 'eps':
         target = noise
         
-    return torch.cat([past_frames, x], dim=1), log_snr, target
+    return x, log_snr, target
 
-def collate_simple_diffusion(b): 
-    "Collate function that noisifies the last frame"
-    return noisify(default_collate(b))
+
     
 # Sampling functions
 
