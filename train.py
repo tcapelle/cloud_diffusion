@@ -16,24 +16,24 @@ from cloud_diffusion.ddpm import collate_ddpm, get_unet_params, UNet2D
 
 
 PROJECT_NAME = "ddpm_clouds"
-DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v1'
+DATASET_ARTIFACT = 'capecape/gtc/np_dataset:v0'
 
 config = SimpleNamespace(    
-    epochs = 100, # number of epochs
+    epochs=50, # number of epochs
     model_name="unet_small", # model name to save [unet_small, unet_big]
-    strategy="ddpm", # strategy to use [ddpm, simple_diffusion]
+    strategy="ddpm", # strategy to use ddpm
     noise_steps=1000, # number of noise steps on the diffusion process
     sampler_steps=333, # number of sampler steps on the diffusion process
-    seed = 42, # random seed
-    batch_size = 6, # batch size
-    img_size = 128, # image size
-    device = "cuda", # device
+    seed=42, # random seed
+    batch_size=128, # batch size
+    img_size=64, # image size
+    device="cuda", # device
     num_workers=8, # number of workers for dataloader
     num_frames=4, # number of frames to use as input
-    lr = 5e-4, # learning rate
+    lr=5e-4, # learning rate
     validation_days=3, # number of days to use for validation
-    n_preds=8, # number of predictions to make 
-    log_every_epoch = 5, # log every n epochs to wandb
+    log_every_epoch=5, # log every n epochs to wandb
+    n_preds=8, # number of predictions to make
     )
 
 def train_func(config):
@@ -47,7 +47,7 @@ def train_func(config):
     train_ds = CloudDataset(files=files[:-config.validation_days],  
                             num_frames=config.num_frames, img_size=config.img_size)
     valid_ds = CloudDataset(files=files[-config.validation_days:], 
-                            num_frames=config.num_frames, img_size=config.img_size)
+                            num_frames=config.num_frames, img_size=config.img_size).shuffle()
 
     collate_fn = collate_ddpm
 
@@ -73,8 +73,10 @@ def train_func(config):
     loss_func = torch.nn.MSELoss()
 
     trainer = MiniTrainer(train_dataloader, valid_dataloader, model, optimizer, scheduler, 
-                        sampler, device, loss_func)
+                          sampler, device, loss_func)
+    wandb.config.update(config)
     trainer.fit(config)
+    
 
 if __name__=="__main__":
     parse_args(config)

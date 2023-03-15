@@ -36,7 +36,6 @@ class MiniTrainer:
         self.device = device
         self.sampler = sampler
         self.val_batch = next(iter(valid_dataloader))[0].to(device)  # grab a fixed batch to log predictions
-        
 
     def train_step(self, loss):
         "Train for one step"
@@ -62,7 +61,7 @@ class MiniTrainer:
    
 
     def fit(self, config):
-        self.val_batch[:min(config.n_preds, 8)]  # log first 8 predictions
+        self.val_batch = self.val_batch[:min(config.n_preds, 8)]  # log first 8 predictions
         for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
             self.one_epoch(epoch)
             
@@ -120,7 +119,7 @@ def diffusers_sampler(model, past_frames, sched, **kwargs):
     new_frame = torch.randn_like(past_frames[:,-1:], dtype=past_frames.dtype, device=device)
     preds = []
     for t in progress_bar(sched.timesteps, leave=False):
-        noise = model(torch.cat([past_frames, new_frame], dim=1), t).sample
+        noise = model(torch.cat([past_frames, new_frame], dim=1), t)
         new_frame = sched.step(noise, t, new_frame, **kwargs).prev_sample
         preds.append(new_frame.float().cpu())
     return preds[-1]

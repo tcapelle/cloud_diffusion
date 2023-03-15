@@ -1,4 +1,6 @@
-import torch
+from pathlib import Path
+
+import torch, wandb
 from torch.utils.data.dataloader import default_collate
 
 from diffusers import UNet2DModel
@@ -50,3 +52,11 @@ def get_unet_params(model_name="unet_small", num_frames=4):
 class UNet2D(UNet2DModel):
     def forward(self, *x, **kwargs):
         return super().forward(*x, **kwargs).sample ## Diffusers's UNet2DOutput class
+    
+    @classmethod
+    def from_artifact(cls, model_params, artifact_name):
+        "Load a UNet2D model from a wandb.Artifact"
+        model = cls(**model_params)
+        artifact = wandb.use_artifact(artifact_name, type='model')
+        artifact_dir = Path(artifact.download())
+        return model.load_state_dict(torch.load(list(artifact_dir.glob("*.pth"))[0]))
