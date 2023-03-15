@@ -21,15 +21,17 @@ def noisify_last_frame(frames, noise_func):
     noise, t, e = noise_func(last_frame)
     return torch.cat([past_frames, noise], dim=1), t, e
 
+def noisify_collate(noise_func): 
+    def _inner(b): 
+        "Collate function that noisifies the last frame"
+        return noisify_last_frame(default_collate(b), noise_func)
+    return _inner
+
 class NoisifyDataloader(DataLoader):
     """Noisify the last frame of a dataloader by applying 
     a noise function, after collating the batch"""
     def __init__(self, dataset, *args, noise_func=None, **kwargs):
-        self.noise_func = noise_func
-        def noisify_collate(b): 
-            "Collate function that noisifies the last frame"
-            return noisify_last_frame(default_collate(b), noise_func)
-        super().__init__(dataset, *args, collate_fn=noisify_collate, **kwargs)
+        super().__init__(dataset, *args, collate_fn=noisify_collate(noise_func), **kwargs)
 
 class MiniTrainer:
     "A mini trainer for the diffusion process"
