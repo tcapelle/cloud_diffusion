@@ -20,6 +20,7 @@ setup(
     ],
     install_requires=[
         "torch",
+        "fastcore",
         "fastprogress",
         "wandb",
         "numpy",
