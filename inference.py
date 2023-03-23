@@ -10,8 +10,8 @@ from fastprogress import progress_bar
 
 
 from cloud_diffusion.dataset import download_dataset, CloudDataset
-from cloud_diffusion.ddpm import UNet2D, get_unet_params
-from cloud_diffusion.utils import ddim_sampler, parse_args, set_seed, ls
+from cloud_diffusion.ddpm import UNet2D, get_unet_params, ddim_sampler
+from cloud_diffusion.utils import parse_args, set_seed, ls
 from cloud_diffusion.wandb import log_images, save_model, to_video, vhtile
 
 PROJECT_NAME = "ddpm_clouds"

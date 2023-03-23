@@ -20,11 +20,12 @@ setup(
     ],
     install_requires=[
         "torch",
-        "fastcore",
         "fastprogress",
+        "fastcore",
         "wandb",
         "numpy",
         "matplotlib",
+        "diffusers",
     ],
     classifiers=[
         "Development Status :: 4 - Beta",
