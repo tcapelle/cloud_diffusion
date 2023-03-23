@@ -75,7 +75,9 @@ def diffusers_sampler(model, past_frames, sched, **kwargs):
     device = next(model.parameters()).device
     new_frame = torch.randn_like(past_frames[:,-1:], dtype=past_frames.dtype, device=device)
     preds = []
-    for t in progress_bar(sched.timesteps, leave=False):
+    pbar = progress_bar(sched.timesteps, leave=False)
+    for t in pbar:
+        pbar.comment = f"DDIM Sampler: frame {t}"
         noise = model(torch.cat([past_frames, new_frame], dim=1), t)
         new_frame = sched.step(noise, t, new_frame, **kwargs).prev_sample
         preds.append(new_frame.float().cpu())
@@ -95,8 +97,7 @@ class UNet2D(UNet2DModel):
     def from_checkpoint(cls, model_params, checkpoint_file):
         "Load a UNet2D model from a checkpoint file"
         model = cls(**model_params)
-        print(f"Loading model from: {checkpoint_file}")
-        model.load_state_dict(torch.load(checkpoint_file))
+        model.load_state_dict(torch.load(checkpoint_file, map_location="cpu"))
         return model
 
 
