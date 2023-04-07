@@ -1,19 +1,15 @@
 from functools import partial
 
-import torch, math
-from torch import nn, sqrt
+import torch
+from torch import sqrt
 from torch.special import expm1
-from torch.utils.data import DataLoader
-from torch.utils.data.dataloader import default_collate
 
 from fastprogress import progress_bar
 
 from einops import repeat
 
 try:
-    from denoising_diffusion_pytorch.simple_diffusion import (
-        UViT, right_pad_dims_to, logsnr_schedule_cosine
-    )
+    from denoising_diffusion_pytorch.simple_diffusion import right_pad_dims_to, logsnr_schedule_cosine
 except:
     raise ImportError("Please install denoising_diffusion_pytorch with `pip install denoising_diffusion_pytorch`")
 
@@ -26,51 +22,24 @@ def q_sample(x_start, times, noise):
 
     return x_noised, log_snr
 
-def noisify(frames, pred_objective="v"):
-    past_frames = frames[:,:-1]
-    last_frame  = frames[:,-1:]
-    device = frames.device
+def noisify_uvit(x0, pred_objective="v"):
+    device = x0.device
     
-    noise =  torch.randn_like(last_frame)
-    times = torch.zeros((last_frame.shape[0],), device = device).float().uniform_(0, 1)
-    x, log_snr = q_sample(last_frame, times, noise)
+    noise =  torch.randn_like(x0)
+    times = torch.zeros((x0.shape[0],), device = device).float().uniform_(0, 1)
+    x, log_snr = q_sample(x0, times, noise)
     
     if pred_objective == 'v':
         padded_log_snr = right_pad_dims_to(x, log_snr)
         alpha, sigma = padded_log_snr.sigmoid().sqrt(), (-padded_log_snr).sigmoid().sqrt()
-        target = alpha * noise - sigma * last_frame
+        target = alpha * noise - sigma * x0
 
     elif pred_objective == 'eps':
         target = noise
         
-    return torch.cat([past_frames, x], dim=1), log_snr, target
+    return x, log_snr, target
 
-def collate_simple_diffusion(b): 
-    "Collate function that noisifies the last frame"
-    return noisify(default_collate(b))
 
-def get_uvit_params(model_name="uvit_small", num_frames=4):
-    "Return the parameters for the diffusers UViT model"
-    if model_name == "uvit_small":
-        return dict(
-            dim=512,
-            ff_mult=2,
-            vit_depth=4,
-            channels=4, 
-            patch_size=4,
-            final_img_itransform=nn.Conv2d(num_frames,1,1)
-            )
-    elif model_name == "uvit_big":
-        return dict(
-            dim=1024,
-            ff_mult=4,
-            vit_depth=8,
-            channels=4, 
-            patch_size=4,
-            final_img_itransform=nn.Conv2d(num_frames,1,1)
-            )
-    else:
-        raise(f"Model name not found: {model_name}, choose between 'uvit_small' or 'uvit_big'")
     
 # Sampling functions
 
@@ -138,4 +107,4 @@ def p_sample_loop(model, past_frames, steps=500):
 def simple_diffusion_sampler(steps=500):
     """Returns a function that samples from the diffusion model using
     the simple diffusion sampling scheme"""
-    return partial(p_sample_loop, steps=500)
+    return partial(p_sample_loop, steps=steps)

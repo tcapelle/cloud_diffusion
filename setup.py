@@ -26,6 +26,7 @@ setup(
         "numpy",
         "matplotlib",
         "diffusers",
+        "denoising_diffusion_pytorch",
     ],
     classifiers=[
         "Development Status :: 4 - Beta",
