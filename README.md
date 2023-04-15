@@ -3,6 +3,11 @@
 
 
 # Cloud Diffusion Experiment
+You can check our GTC presentation on YouTube:
+[![](assets/front.jpg)](https://www.youtube.com/watch?v=L5h9kbMMzZs)
+
+Some samples for the model generations:
+![](assets/cloud_ddpm.gif)
 
 This codebase contains an implementation of a deep diffusion model applied to cloud images. It was developed as part of a research project exploring the potential of diffusion models for image generation and forecasting.
 
