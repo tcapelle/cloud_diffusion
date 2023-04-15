@@ -6,8 +6,8 @@
 You can check our GTC presentation on YouTube:
 [![](assets/front.jpg)](https://www.youtube.com/watch?v=L5h9kbMMzZs)
 
-Some samples for the model generations:
-![](assets/cloud_ddpm.gif)
+Some samples for the model generations can be found here: 
+<iframe src="https://wandb.ai/capecape/ddpm_clouds?workspace=user-capecape" style="border:none;height:1024px;width:100%">
 
 This codebase contains an implementation of a deep diffusion model applied to cloud images. It was developed as part of a research project exploring the potential of diffusion models for image generation and forecasting.
 
