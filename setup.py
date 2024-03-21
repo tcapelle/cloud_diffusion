@@ -25,8 +25,8 @@ setup(
         "wandb",
         "numpy",
         "matplotlib",
-        "diffusers",
-        "denoising_diffusion_pytorch",
+        "diffusers==0.9.0",
+        "denoising_diffusion_pytorch==1.1.0",
     ],
     classifiers=[
         "Development Status :: 4 - Beta",

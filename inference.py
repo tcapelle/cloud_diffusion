@@ -5,7 +5,8 @@ import torch, wandb
 from fastprogress import progress_bar
 
 from cloud_diffusion.dataset import download_dataset, CloudDataset
-from cloud_diffusion.ddpm import UNet2D, get_unet_params, ddim_sampler
+from cloud_diffusion.ddpm import ddim_sampler
+from cloud_diffusion.models import UNet2D, get_unet_params
 from cloud_diffusion.utils import parse_args, set_seed
 from cloud_diffusion.wandb import to_video, vhtile
 
